@@ -12,9 +12,9 @@ permissions:
 
 jobs:
   build-windows:
-    name: Build ${{ matrix.label }}
+    name: Build ${ matrix.label }
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -31,7 +31,7 @@ jobs:
             asset: arm64
 
     steps:
-      - name: Checkout
+      - name: Checkout Rayburst overlay
         uses: actions/checkout@v4
 
       - name: Install .NET 10 SDK
@@ -39,23 +39,34 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Restore
+      - name: Clone pinned OnionFruit source
         shell: pwsh
-        run: dotnet restore src/RayburstReach/RayburstReach.csproj -r ${{ matrix.rid }}
+        run: |
+          git clone --depth 1 --branch 2026.620.0 https://github.com/dragonfruitnetwork/onionfruit.git onionfruit
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Apply Rayburst overlay
+        shell: pwsh
+        run: .\scripts\Apply-RayburstPort.ps1 -SourceRoot .\onionfruit
+
+      - name: Restore .NET packages
+        shell: pwsh
+        run: dotnet restore onionfruit/DragonFruit.OnionFruit.Windows/DragonFruit.OnionFruit.Windows.csproj -r ${ matrix.rid }
 
       - name: Publish self-contained app
         shell: pwsh
         run: |
-          $version = if ($env:GITHUB_REF -match '^refs/tags/v(.+)$') { $Matches[1] } else { '0.1.0' }
+          $version = if ($env:GITHUB_REF -match '^refs/tags/v(.+)$') { $Matches[1] } else { '0.2.0' }
           New-Item -ItemType Directory -Force -Path artifacts/publish, artifacts/installer | Out-Null
-          dotnet publish src/RayburstReach/RayburstReach.csproj --configuration Release --runtime '${{ matrix.rid }}' --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -p:Version=$version --output artifacts/publish
+          Copy-Item onionfruit/licence.md artifacts/publish/LICENCE-ONIONFRUIT.md
+          dotnet publish onionfruit/DragonFruit.OnionFruit.Windows/DragonFruit.OnionFruit.Windows.csproj --configuration Release --runtime '${ matrix.rid }' --self-contained true -p:AssemblyName=RayburstReach -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -p:PublishReadyToRun=false -p:Version=$version --output artifacts/publish
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Download and verify pinned Aria2 Next engine and license
+      - name: Download and verify Aria2 Next engine and license
         shell: pwsh
         run: |
           $version = (Get-Content engine/aria2-next.version -Raw).Trim()
-          $assetName = "aria2-next-$version-${{ matrix.engine_asset }}.exe"
+          $assetName = "aria2-next-$version-${ matrix.engine_asset }.exe"
           $checksumName = "aria2-next-$version-checksums.sha256"
           $release = Invoke-RestMethod -Uri "https://api.github.com/repos/AnInsomniacy/aria2-next/releases/tags/v$version" -Headers @{ 'User-Agent' = 'RayburstAvalonia-CI' }
           $asset = $release.assets | Where-Object { $_.name -eq $assetName } | Select-Object -First 1
@@ -69,12 +80,12 @@ jobs:
           $actual = (Get-FileHash -Algorithm SHA256 "artifacts/publish/aria2-next.exe").Hash.ToLowerInvariant()
           if ($actual -ne $expected) { throw "Aria2 Next checksum mismatch. Expected $expected; received $actual." }
           Invoke-WebRequest -Uri "https://raw.githubusercontent.com/AnInsomniacy/aria2-next/v$version/COPYING" -OutFile "artifacts/publish/COPYING-Aria2-Next.txt"
-          "Verified Aria2 Next v$version (${{ matrix.engine_asset }}): $actual" | Write-Host
+          Write-Host "Verified Aria2 Next v$version (${ matrix.engine_asset }): $actual"
 
       - name: Install Inno Setup 6
         shell: pwsh
         run: |
-          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          $iscc = "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) {
             choco install innosetup --yes --no-progress
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -84,59 +95,16 @@ jobs:
       - name: Compile installer
         shell: pwsh
         run: |
-          $version = if ($env:GITHUB_REF -match '^refs/tags/v(.+)$') { $Matches[1] } else { '0.1.0' }
-          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          & $iscc "/DMyAppVersion=$version" /DMyAppArchitecture=${{ matrix.setup_arch }} /DMyAppOutputName=${{ matrix.asset }} "installer/RayburstReach.iss"
+          $version = if ($env:GITHUB_REF -match '^refs/tags/v(.+)$') { $Matches[1] } else { '0.2.0' }
+          $iscc = "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe"
+          & $iscc "/DMyAppVersion=$version" /DMyAppArchitecture=${ matrix.setup_arch } /DMyAppOutputName=${ matrix.asset } "installer/RayburstReach.iss"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if (-not (Test-Path "artifacts/installer/RayburstReach-Setup-${{ matrix.asset }}.exe")) { throw "Installer was not created." }
+          if (-not (Test-Path "artifacts/installer/RayburstReach-Setup-${ matrix.asset }.exe")) { throw "Installer was not created." }
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: installer-${{ matrix.asset }}
-          path: artifacts/installer/RayburstReach-Setup-${{ matrix.asset }}.exe
+          name: installer-${ matrix.asset }
+          path: artifacts/installer/RayburstReach-Setup-${ matrix.asset }.exe
           if-no-files-found: error
           retention-days: 14
-
-  publish-release:
-    name: Publish GitHub Release
-    if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[publish-release]'))
-    needs: [build-windows]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Download installer artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: installer-*
-          path: release-assets
-          merge-multiple: true
-
-      - name: Generate SHA-256 manifest
-        run: cd release-assets && sha256sum RayburstReach-Setup-*.exe > SHA256SUMS.txt
-
-      - name: Publish release
-        uses: softprops/action-gh-release@v3
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v0.1.0' }}
-          target_commitish: ${{ github.sha }}
-          name: Rayburst Avalonia ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v0.1.0' }}
-          body: |
-            Windows x64 and native ARM64 installers for Rayburst Avalonia.
-
-            - `RayburstReach-Setup-x64.exe`: Intel/AMD x64 Windows; also supports Windows 11 ARM64 emulation.
-            - `RayburstReach-Setup-arm64.exe`: native Windows ARM64.
-
-            The release workflow validates the bundled Aria2 Next engine against the upstream SHA-256 manifest and includes the engine's GPL-2.0 license file.
-            This is an early independent .NET/Avalonia port and is not yet feature-equivalent to upstream Rayburst.
-          files: |
-            release-assets/RayburstReach-Setup-x64.exe
-            release-assets/RayburstReach-Setup-arm64.exe
-            release-assets/SHA256SUMS.txt
-          fail_on_unmatched_files: true
-          draft: false
-          prerelease: false
-          make_latest: true
