@@ -100,7 +100,7 @@ jobs:
 
   publish-release:
     name: Publish GitHub Release
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[publish-release]'))
     needs: [build-windows]
     runs-on: ubuntu-latest
     permissions:
@@ -121,8 +121,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ github.ref_name }}
-          name: Rayburst Avalonia ${{ github.ref_name }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v0.1.0' }}
+          target_commitish: ${{ github.sha }}
+          name: Rayburst Avalonia ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v0.1.0' }}
           body: |
             Windows x64 and native ARM64 installers for Rayburst Avalonia.
 
