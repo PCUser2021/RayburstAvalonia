@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   build-windows:
-    name: Build ${ matrix.label }
+    name: Build ${{ matrix.label }}
     runs-on: windows-latest
     timeout-minutes: 60
     strategy:
@@ -51,7 +51,7 @@ jobs:
 
       - name: Restore .NET packages
         shell: pwsh
-        run: dotnet restore onionfruit/DragonFruit.OnionFruit.Windows/DragonFruit.OnionFruit.Windows.csproj -r ${ matrix.rid }
+        run: dotnet restore onionfruit/DragonFruit.OnionFruit.Windows/DragonFruit.OnionFruit.Windows.csproj -r ${{ matrix.rid }}
 
       - name: Publish self-contained app
         shell: pwsh
@@ -59,14 +59,14 @@ jobs:
           $version = if ($env:GITHUB_REF -match '^refs/tags/v(.+)$') { $Matches[1] } else { '0.2.0' }
           New-Item -ItemType Directory -Force -Path artifacts/publish, artifacts/installer | Out-Null
           Copy-Item onionfruit/licence.md artifacts/publish/LICENCE-ONIONFRUIT.md
-          dotnet publish onionfruit/DragonFruit.OnionFruit.Windows/DragonFruit.OnionFruit.Windows.csproj --configuration Release --runtime '${ matrix.rid }' --self-contained true -p:AssemblyName=RayburstReach -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -p:PublishReadyToRun=false -p:Version=$version --output artifacts/publish
+          dotnet publish onionfruit/DragonFruit.OnionFruit.Windows/DragonFruit.OnionFruit.Windows.csproj --configuration Release --runtime '${{ matrix.rid }}' --self-contained true -p:AssemblyName=RayburstReach -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -p:PublishReadyToRun=false -p:Version=$version --output artifacts/publish
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Download and verify Aria2 Next engine and license
         shell: pwsh
         run: |
           $version = (Get-Content engine/aria2-next.version -Raw).Trim()
-          $assetName = "aria2-next-$version-${ matrix.engine_asset }.exe"
+          $assetName = "aria2-next-$version-${{ matrix.engine_asset }}.exe"
           $checksumName = "aria2-next-$version-checksums.sha256"
           $release = Invoke-RestMethod -Uri "https://api.github.com/repos/AnInsomniacy/aria2-next/releases/tags/v$version" -Headers @{ 'User-Agent' = 'RayburstAvalonia-CI' }
           $asset = $release.assets | Where-Object { $_.name -eq $assetName } | Select-Object -First 1
@@ -80,12 +80,12 @@ jobs:
           $actual = (Get-FileHash -Algorithm SHA256 "artifacts/publish/aria2-next.exe").Hash.ToLowerInvariant()
           if ($actual -ne $expected) { throw "Aria2 Next checksum mismatch. Expected $expected; received $actual." }
           Invoke-WebRequest -Uri "https://raw.githubusercontent.com/AnInsomniacy/aria2-next/v$version/COPYING" -OutFile "artifacts/publish/COPYING-Aria2-Next.txt"
-          Write-Host "Verified Aria2 Next v$version (${ matrix.engine_asset }): $actual"
+          Write-Host "Verified Aria2 Next v$version (${{ matrix.engine_asset }}): $actual"
 
       - name: Install Inno Setup 6
         shell: pwsh
         run: |
-          $iscc = "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe"
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) {
             choco install innosetup --yes --no-progress
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -96,15 +96,15 @@ jobs:
         shell: pwsh
         run: |
           $version = if ($env:GITHUB_REF -match '^refs/tags/v(.+)$') { $Matches[1] } else { '0.2.0' }
-          $iscc = "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe"
-          & $iscc "/DMyAppVersion=$version" /DMyAppArchitecture=${ matrix.setup_arch } /DMyAppOutputName=${ matrix.asset } "installer/RayburstReach.iss"
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          & $iscc "/DMyAppVersion=$version" /DMyAppArchitecture=${{ matrix.setup_arch }} /DMyAppOutputName=${{ matrix.asset }} "installer/RayburstReach.iss"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if (-not (Test-Path "artifacts/installer/RayburstReach-Setup-${ matrix.asset }.exe")) { throw "Installer was not created." }
+          if (-not (Test-Path "artifacts/installer/RayburstReach-Setup-${{ matrix.asset }}.exe")) { throw "Installer was not created." }
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: installer-${ matrix.asset }
-          path: artifacts/installer/RayburstReach-Setup-${ matrix.asset }.exe
+          name: installer-${{ matrix.asset }}
+          path: artifacts/installer/RayburstReach-Setup-${{ matrix.asset }}.exe
           if-no-files-found: error
           retention-days: 14
