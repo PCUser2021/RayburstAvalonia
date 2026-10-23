@@ -2,18 +2,16 @@
 
 ## Rayburst
 
-Repository: <https://github.com/AnInsomniacy/rayburst>
+The application source, branding, and application assets are from [AnInsomniacy/rayburst](https://github.com/AnInsomniacy/rayburst), pinned to release `v4.1.0` (commit `e8173d6d5b47576309e434150192b2a1649a4110`). Rayburst is licensed under the MIT License; see `LICENSE`.
 
-Rayburst is an MIT-licensed open-source download manager. Its name, branding, original assets, and upstream source remain owned by their respective rights holders. This independent port is not endorsed by or affiliated with the Rayburst maintainer. This scaffold does not copy the complete Rayburst source tree or its icon/brand assets.
+## aria2-next
 
-## ResolverReach
+Rayburst bundles the architecture-matched `aria2-next` executable supplied by the pinned Rayburst source tree. The upstream project's published licensing and source terms apply. The source project is maintained at https://github.com/AnInsomniacy/aria2-next.
 
-Repository: <https://github.com/PCUser2021/ResolverReach>
+## OnionFruit
 
-ResolverReach is MIT-licensed. It served as a reference for the .NET/Avalonia desktop project structure and x64/ARM64 installer workflow. Its original code and project-authored assets remain attributable to PCUser2021.
+[DragonFruit.Network/OnionFruit](https://github.com/dragonfruitnetwork/onionfruit) was inspected as the requested reference project. It is a separate Tor connectivity application distributed under LGPL-3.0, with a .NET/Avalonia stack; Rayburst is a Tauri/Rust + Vue download manager with its own aria2-next engine. Directly substituting OnionFruit's runtime or its Tor-specific code would not preserve Rayburst's behavior. Accordingly, this distribution keeps the real upstream Rayburst implementation intact and does not falsely claim to embed OnionFruit code. If OnionFruit source code is later incorporated into the application, its LGPL notices and corresponding-source obligations must be satisfied.
 
-## Aria2 Next
+## Inno Setup
 
-Repository/source: <https://github.com/AnInsomniacy/aria2-next>
-
-The application downloads the standalone \`aria2-next\` Windows engine executable from upstream Releases during CI. The workflow pins the engine version and validates the downloaded executable using the upstream SHA-256 manifest before bundling it. Aria2 Next is based on aria2 and its upstream \`COPYING\` file contains the GNU General Public License, version 2; the release workflow includes that license alongside the bundled engine. See the upstream repository for full corresponding source and license terms. The engine is a separate executable and is not represented as original code from this repository.
+Installers are compiled using Inno Setup 6. Inno Setup is not bundled into the application; see https://jrsoftware.org/isinfo.php for its license.

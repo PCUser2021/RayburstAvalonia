@@ -1,8 +1,6 @@
-bin/
-obj/
-.vs/
-.idea/
 artifacts/
+upstream/node_modules/
+upstream/src-tauri/target/
+upstream/src-tauri/generated-binaries/
 *.user
 *.suo
-*.log

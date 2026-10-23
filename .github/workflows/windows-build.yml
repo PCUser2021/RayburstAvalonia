@@ -1,4 +1,4 @@
-name: Windows x64 and ARM64 installers
+name: Rayburst Windows x64 and ARM64 Inno Setup installers
 
 on:
   push:
@@ -10,77 +10,52 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: rayburst-installers-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-windows:
-    name: Build ${{ matrix.label }}
-    runs-on: windows-latest
-    timeout-minutes: 60
+    name: Build Windows ${{ matrix.label }} installer
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
         include:
-          - label: x64
-            rid: win-x64
-            engine_asset: windows-x86_64
-            setup_arch: x64compatible
-            asset: x64
+          - label: x86-64
+            target: x86_64-pc-windows-msvc
+            output: x64
           - label: ARM64
-            rid: win-arm64
-            engine_asset: windows-arm64
-            setup_arch: arm64
-            asset: arm64
+            target: aarch64-pc-windows-msvc
+            output: arm64
 
     steps:
-      - name: Checkout Rayburst overlay
-        uses: actions/checkout@v4
-
-      - name: Install .NET 10 SDK
-        uses: actions/setup-dotnet@v4
+      - name: Checkout packaging repository and pinned Rayburst submodule
+        uses: actions/checkout@v6
         with:
-          dotnet-version: 10.0.x
+          submodules: recursive
+          fetch-depth: 1
 
-      - name: Clone pinned OnionFruit source
-        shell: pwsh
-        run: |
-          git clone --depth 1 --branch 2026.620.0 https://github.com/dragonfruitnetwork/onionfruit.git onionfruit
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.5.2
 
-      - name: Apply Rayburst overlay
-        shell: pwsh
-        run: .\scripts\Apply-RayburstPort.ps1 -SourceRoot .\onionfruit
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: upstream/pnpm-lock.yaml
 
-      - name: Restore .NET packages
-        shell: pwsh
-        run: dotnet restore onionfruit/DragonFruit.OnionFruit.Windows/DragonFruit.OnionFruit.Windows.csproj -r ${{ matrix.rid }}
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
 
-      - name: Publish self-contained app
+      - name: Add ARM64 Rust target
+        if: matrix.output == 'arm64'
         shell: pwsh
-        run: |
-          $version = if ($env:GITHUB_REF -match '^refs/tags/v(.+)$') { $Matches[1] } else { '0.2.0' }
-          New-Item -ItemType Directory -Force -Path artifacts/publish, artifacts/installer | Out-Null
-          Copy-Item onionfruit/licence.md artifacts/publish/LICENCE-ONIONFRUIT.md
-          dotnet publish onionfruit/DragonFruit.OnionFruit.Windows/DragonFruit.OnionFruit.Windows.csproj --configuration Release --runtime '${{ matrix.rid }}' --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -p:PublishReadyToRun=false -p:Version=$version --output artifacts/publish
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-      - name: Download and verify Aria2 Next engine and license
-        shell: pwsh
-        run: |
-          $version = (Get-Content engine/aria2-next.version -Raw).Trim()
-          $assetName = "aria2-next-$version-${{ matrix.engine_asset }}.exe"
-          $checksumName = "aria2-next-$version-checksums.sha256"
-          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/AnInsomniacy/aria2-next/releases/tags/v$version" -Headers @{ 'User-Agent' = 'RayburstAvalonia-CI' }
-          $asset = $release.assets | Where-Object { $_.name -eq $assetName } | Select-Object -First 1
-          $checksums = $release.assets | Where-Object { $_.name -eq $checksumName } | Select-Object -First 1
-          if (-not $asset -or -not $checksums) { throw "Required engine asset or checksum manifest missing from Aria2 Next v$version." }
-          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "artifacts/publish/aria2-next.exe"
-          Invoke-WebRequest -Uri $checksums.browser_download_url -OutFile "artifacts/aria2-next-checksums.sha256"
-          $line = Get-Content "artifacts/aria2-next-checksums.sha256" | Where-Object { $_ -match [regex]::Escape($assetName) } | Select-Object -First 1
-          if (-not $line -or $line -notmatch '^\s*([a-fA-F0-9]{64})') { throw "Could not parse SHA-256 for $assetName." }
-          $expected = $Matches[1].ToLowerInvariant()
-          $actual = (Get-FileHash -Algorithm SHA256 "artifacts/publish/aria2-next.exe").Hash.ToLowerInvariant()
-          if ($actual -ne $expected) { throw "Aria2 Next checksum mismatch. Expected $expected; received $actual." }
-          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/AnInsomniacy/aria2-next/v$version/COPYING" -OutFile "artifacts/publish/COPYING-Aria2-Next.txt"
-          Write-Host "Verified Aria2 Next v$version (${{ matrix.engine_asset }}): $actual"
+        run: rustup target add ${{ matrix.target }}
 
       - name: Install Inno Setup 6
         shell: pwsh
@@ -90,21 +65,20 @@ jobs:
             choco install innosetup --yes --no-progress
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
-          if (-not (Test-Path $iscc)) { throw "Inno Setup compiler was not found at $iscc" }
+          if (-not (Test-Path $iscc)) { throw "ISCC.exe was not found at $iscc" }
 
-      - name: Compile installer
+      - name: Build and package Rayburst
         shell: pwsh
-        run: |
-          $version = if ($env:GITHUB_REF -match '^refs/tags/v(.+)$') { $Matches[1] } else { '0.2.0' }
-          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          & $iscc "/DMyAppVersion=$version" /DMyAppArchitecture=${{ matrix.setup_arch }} /DMyAppOutputName=${{ matrix.asset }} "installer/RayburstReach.iss"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if (-not (Test-Path "artifacts/installer/RayburstReach-Setup-${{ matrix.asset }}.exe")) { throw "Installer was not created." }
+        env:
+          TARGET_TRIPLE: ${{ matrix.target }}
+          OUTPUT_ARCH: ${{ matrix.output }}
+          RAYBURST_VERSION: 4.1.0
+        run: .\scripts\Build-Rayburst.ps1
 
-      - name: Upload installer artifact
+      - name: Upload Inno Setup installer
         uses: actions/upload-artifact@v4
         with:
-          name: installer-${{ matrix.asset }}
-          path: artifacts/installer/RayburstReach-Setup-${{ matrix.asset }}.exe
+          name: Rayburst-4.1.0-Windows-${{ matrix.output }}
+          path: artifacts/installer/Rayburst-4.1.0-Setup-${{ matrix.output }}.exe
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
