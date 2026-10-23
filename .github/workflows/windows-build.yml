@@ -59,7 +59,7 @@ jobs:
           $version = if ($env:GITHUB_REF -match '^refs/tags/v(.+)$') { $Matches[1] } else { '0.2.0' }
           New-Item -ItemType Directory -Force -Path artifacts/publish, artifacts/installer | Out-Null
           Copy-Item onionfruit/licence.md artifacts/publish/LICENCE-ONIONFRUIT.md
-          dotnet publish onionfruit/DragonFruit.OnionFruit.Windows/DragonFruit.OnionFruit.Windows.csproj --configuration Release --runtime '${{ matrix.rid }}' --self-contained true -p:AssemblyName=RayburstReach -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -p:PublishReadyToRun=false -p:Version=$version --output artifacts/publish
+          dotnet publish onionfruit/DragonFruit.OnionFruit.Windows/DragonFruit.OnionFruit.Windows.csproj --configuration Release --runtime '${{ matrix.rid }}' --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -p:PublishReadyToRun=false -p:Version=$version --output artifacts/publish
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Download and verify Aria2 Next engine and license
