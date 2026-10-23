@@ -20,6 +20,20 @@ Copy-Item -LiteralPath (Join-Path $repoRoot 'port\DragonFruit.OnionFruit\Views\R
 Copy-Item -LiteralPath (Join-Path $repoRoot 'port\DragonFruit.OnionFruit\Views\RayburstMainWindow.axaml.cs') -Destination $views -Force
 Copy-Item -Path (Join-Path $repoRoot 'port\DragonFruit.OnionFruit\Downloads\*') -Destination $downloads -Force
 
+# Set the executable name on the entry-point project itself. A global AssemblyName
+# publish property propagates to referenced projects and causes ambiguous NuGet project names.
+$windowsProject = Join-Path $source 'DragonFruit.OnionFruit.Windows\\DragonFruit.OnionFruit.Windows.csproj'
+[xml]$projectXml = Get-Content -LiteralPath $windowsProject -Raw
+$assemblyNode = $projectXml.SelectSingleNode("/Project/PropertyGroup/AssemblyName")
+if ($null -eq $assemblyNode) {
+    $group = $projectXml.SelectSingleNode('/Project/PropertyGroup')
+    if ($null -eq $group) { $group = $projectXml.CreateElement('PropertyGroup'); [void]$projectXml.Project.AppendChild($group) }
+    $assemblyNode = $projectXml.CreateElement('AssemblyName')
+    [void]$group.AppendChild($assemblyNode)
+}
+$assemblyNode.InnerText = 'RayburstReach'
+$projectXml.Save($windowsProject)
+
 # Replace the upstream Windows shell entry point with a minimal Avalonia host.
 $program = @'
 using Avalonia;
