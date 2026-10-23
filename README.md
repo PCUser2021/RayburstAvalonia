@@ -1,25 +1,36 @@
-# Rayburst — Avalonia port (work in progress)
+# Rayburst Avalonia — OnionFruit-based port in progress
 
-> **Status correction (2026-10-23): the published v0.1.0 build is only a basic prototype. It is not a 100% recreation of Rayburst. Do not treat the current release as feature-complete.**
+The target is a **complete recreation of [Rayburst](https://github.com/AnInsomniacy/rayburst)**, using the Windows .NET 10/Avalonia project structure from [OnionFruit](https://github.com/dragonfruitnetwork/onionfruit) as the starting point.
 
-The target is to port the behavior and feature set of [Rayburst](https://github.com/AnInsomniacy/rayburst) to a Windows-first .NET 10 / Avalonia application, using the [OnionFruit 2026.620.0 source](https://github.com/dragonfruitnetwork/onionfruit/tree/2026.620.0) as the requested UI/application-architecture reference. This project must not use ResolverReach as its foundation.
+**Current truth:** this is not 100% complete yet. The repository contains a Rayburst UI/engine overlay and a script that applies it to the OnionFruit source checkout. Feature gaps are listed in PORT_SPECIFICATION.md; I will not label the project complete before those are implemented and tested.
 
-**Important distinction:** OnionFruit is a Tor proxy gateway, not a download manager. Its [installer](https://github.com/dragonfruitnetwork/onionfruit/releases/download/2026.620.0/install-x64.exe) is a compiled binary; the [source archive](https://github.com/dragonfruitnetwork/onionfruit/archive/refs/tags/2026.620.0.zip) is the relevant reference for its .NET 10, Avalonia, FluentAvalonia and ReactiveUI architecture. The Tor-specific behavior must be replaced with Rayburst's download-manager behavior.
+## Windows developer workflow
 
-## Target features
+The port follows OnionFruit's Windows workflow: clone the source, enter its folder, and run the same Windows project. Because unmodified OnionFruit is a Tor proxy gateway, apply the Rayburst overlay before running it:
 
-The target includes Rayburst's multi-protocol download engine and task experience, HLS/DASH handling, torrent and magnet flows, browser extension handoff, task scheduling/speed limits, history, tray/lightweight/floating-window behavior, notifications, system integration, settings, localization, and updater. The detailed acceptance checklist is in [PORT_SPECIFICATION.md](PORT_SPECIFICATION.md).
+```powershell
+git clone https://github.com/dragonfruitnetwork/onionfruit
+cd onionfruit
+git clone https://github.com/PCUser2021/RayburstAvalonia rayburst-port
+.\rayburst-port\scripts\Apply-RayburstPort.ps1 -SourceRoot .
+dotnet run --project DragonFruit.OnionFruit.Windows
+```
 
-- Target behavior source: [Rayburst](https://github.com/AnInsomniacy/rayburst)
-- Requested architecture reference: [OnionFruit 2026.620.0](https://github.com/dragonfruitnetwork/onionfruit/tree/2026.620.0)
-- Download engine to evaluate/pin: [Aria2 Next 3.0.8](https://github.com/AnInsomniacy/aria2-next/releases/tag/v3.0.8)
+Install Git and the .NET 10 SDK first. The overlay copies the Rayburst Avalonia window and download-engine client into the cloned source and changes the startup path so OnionFruit's Tor/proxy/DNS runtime is not started.
 
-## Current build
+## Currently implemented
 
-The existing `RayburstReach` prototype has a basic Avalonia window and local Aria2 Next JSON-RPC task controls. The x64 and ARM64 installers compiled successfully in GitHub Actions, but only compile/package success was verified. Runtime smoke tests and feature parity have not been established.
+- Avalonia desktop window with URL entry and download queue.
+- Destination folder picker.
+- Basic task status/progress/speed display.
+- Pause, resume, remove and refresh controls.
+- Separate Aria2 Next engine process with JSON-RPC bound to loopback and a generated per-run secret.
+- Windows CI configured to clone the pinned OnionFruit 2026.620.0 source, apply the overlay, and build x64/ARM64 packages.
 
-[View published v0.1.0 artifacts](https://github.com/PCUser2021/RayburstAvalonia/releases/tag/v0.1.0) — **prototype only, not feature-complete**.
+## Not yet complete
+
+Full Rayburst recreation still requires visual/interaction parity, comprehensive torrent controls and file selection, HLS/DASH workflows, browser extension/native messaging, cookies/referers, task details, scheduling and speed policies, persistent history, tray/lightweight/floating-window modes, protocol/deep-link and file associations, notifications and keep-awake behavior, proxy configuration, update channels, localization, and automated tests. A successful compile alone does not establish 100% parity.
 
 ## Licensing
 
-Rayburst's source is MIT-licensed. OnionFruit is LGPL-3.0-licensed. Aria2 Next carries its own upstream license. If code is incorporated from OnionFruit or bundled from Aria2 Next, preserve the corresponding source, copyright, license, and distribution obligations. See [LICENSE](LICENSE) and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+Rayburst is MIT-licensed. OnionFruit source is LGPL-3.0; preserve its notices and comply with source/binary distribution requirements when distributing a derivative. Aria2 Next is a separately executed engine under its own upstream license. This is an independent port, not an official release from either project.
